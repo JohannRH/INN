@@ -3,6 +3,7 @@ import '../widgets/expandable_info_panel.dart';
 import '../models/business.dart';
 import '../components/search_bar.dart';
 import '../widgets/business_list.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -131,24 +132,23 @@ class _HomePageState extends State<HomePage> {
 
 
     Widget _buildMapWidget() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    CameraOptions camera = CameraOptions(
+      center: Point(coordinates: Position(-75.56359, 6.25184)), // lng, lat
+      zoom: 13,
+    );
+
+    return Stack(
+      children: [
+        MapWidget(
+          cameraOptions: camera,
         ),
-      ),
-      child: Column(
-        children: [
-          SafeArea(
-            child: CustomSearchBar(
-              controller: _searchController
-            ),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: CustomSearchBar(controller: _searchController),
           ),
-          const Spacer(),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

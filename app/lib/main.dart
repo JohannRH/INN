@@ -4,8 +4,17 @@ import 'navigation/bottom_navigation.dart';
 import 'pages/home_page.dart';
 import 'pages/petitions_page.dart';
 import 'pages/profile_page.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
+
+  final accessToken = dotenv.env['MAPBOX_ACCESS_TOKEN'] ?? '';
+  MapboxOptions.setAccessToken(accessToken);
+
   runApp(const MainApp());
 }
 
