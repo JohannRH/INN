@@ -4,6 +4,7 @@ import 'navigation/bottom_navigation.dart';
 import 'pages/home_page.dart';
 import 'pages/petitions_page.dart';
 import 'pages/profile_page.dart';
+import 'pages/login_page.dart'; // 👈 importar login
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -41,7 +42,8 @@ class _MainAppState extends State<MainApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: MainScreen(toggleTheme: toggleTheme, isDarkMode: _isDarkMode),
+      // 👇 login es la primera pantalla
+      home: LoginPage(),
       debugShowCheckedModeBanner: false,
     );
   }
