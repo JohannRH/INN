@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'signup_page.dart';
 import '../main.dart';
+import '../services/auth.dart';
+import '../services/session.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -13,6 +15,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -38,13 +41,67 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  void _login(BuildContext context) {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MainScreen(
-          toggleTheme: () {}, // TODO: integrar con tu lógica de tema
-          isDarkMode: false,
+  final _authService = AuthService();
+
+  void _login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showErrorSnackBar("Por favor ingresa email y contraseña");
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result = await _authService.login(email, password);
+
+      // Check if the widget is still mounted before using context
+      if (!mounted) return;
+
+      final token = result['access_token'];
+      final user = result['user'];
+
+      // Save session
+      await SessionService.saveSession(token, user);
+
+      // Navigate to main screen
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MainScreen(
+              toggleTheme: () {},
+              isDarkMode: false,
+            ),
+          ),
+          (route) => false, // This removes all previous routes
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showErrorSnackBar("Error al iniciar sesión: ${e.toString()}");
+      }
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
         ),
       ),
     );
@@ -105,6 +162,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     TextField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
+                      enabled: !_isLoading,
                       decoration: InputDecoration(
                         labelText: "Correo electrónico",
                         hintText: "ejemplo@correo.com",
@@ -122,6 +180,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     TextField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
+                      enabled: !_isLoading,
                       decoration: InputDecoration(
                         labelText: "Contraseña",
                         prefixIcon: const Icon(Icons.lock_outlined),
@@ -131,7 +190,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
                           ),
-                          onPressed: () {
+                          onPressed: _isLoading ? null : () {
                             setState(() {
                               _obscurePassword = !_obscurePassword;
                             });
@@ -150,7 +209,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed: () {},
+                        onPressed: _isLoading ? null : () {},
                         child: Text(
                           "¿Olvidaste tu contraseña?",
                           style: TextStyle(
@@ -166,7 +225,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () => _login(context),
+                        onPressed: _isLoading ? null : _login,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: theme.colorScheme.primary,
                           foregroundColor: theme.colorScheme.onPrimary,
@@ -176,20 +235,29 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           ),
                           elevation: 2,
                         ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              "Iniciar Sesión",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                        child: _isLoading
+                            ? SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: theme.colorScheme.onPrimary,
+                                ),
+                              )
+                            : const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    "Iniciar Sesión",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Icon(Icons.arrow_forward, size: 18),
+                                ],
                               ),
-                            ),
-                            SizedBox(width: 8),
-                            Icon(Icons.arrow_forward, size: 18),
-                          ],
-                        ),
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -224,7 +292,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(
-                        onPressed: () => _goToSignup(context),
+                        onPressed: _isLoading ? null : () => _goToSignup(context),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(

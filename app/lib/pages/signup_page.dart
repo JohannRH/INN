@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/auth.dart';
+import '../main.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -25,6 +27,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _slideAnimation;
 
+  final _authService = AuthService();
+
   @override
   void initState() {
     super.initState();
@@ -36,30 +40,10 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
     _animationController.forward();
-    
-    // Add listeners to text controllers to update button state
-    _emailController.addListener(_updateButtonState);
-    _passwordController.addListener(_updateButtonState);
-    _confirmPasswordController.addListener(_updateButtonState);
-    _businessNameController.addListener(_updateButtonState);
-    _nitController.addListener(_updateButtonState);
-    _addressController.addListener(_updateButtonState);
-    _phoneController.addListener(_updateButtonState);
-    _descriptionController.addListener(_updateButtonState);
   }
 
   @override
   void dispose() {
-    // Remove listeners before disposing
-    _emailController.removeListener(_updateButtonState);
-    _passwordController.removeListener(_updateButtonState);
-    _confirmPasswordController.removeListener(_updateButtonState);
-    _businessNameController.removeListener(_updateButtonState);
-    _nitController.removeListener(_updateButtonState);
-    _addressController.removeListener(_updateButtonState);
-    _phoneController.removeListener(_updateButtonState);
-    _descriptionController.removeListener(_updateButtonState);
-    
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -70,12 +54,6 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     _descriptionController.dispose();
     _animationController.dispose();
     super.dispose();
-  }
-
-  void _updateButtonState() {
-    setState(() {
-      // This will trigger a rebuild and update the button state
-    });
   }
 
   void _nextStep() {
@@ -104,30 +82,62 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         return _selectedType != null;
       case 1:
         return _emailController.text.isNotEmpty &&
-               _passwordController.text.isNotEmpty &&
-               _confirmPasswordController.text.isNotEmpty &&
-               _passwordController.text == _confirmPasswordController.text;
+            _passwordController.text.isNotEmpty &&
+            _confirmPasswordController.text.isNotEmpty &&
+            _passwordController.text == _confirmPasswordController.text;
       case 2:
-        // Final step for both Cliente and Negocio - always require terms acceptance
         if (_selectedType == "Cliente") {
           return _phoneController.text.isNotEmpty && _termsAccepted;
         } else {
-          return _businessNameController.text.isNotEmpty && 
-                 _nitController.text.isNotEmpty &&
-                 _addressController.text.isNotEmpty && 
-                 _phoneController.text.isNotEmpty && 
-                 _termsAccepted;
+          return _businessNameController.text.isNotEmpty &&
+              _nitController.text.isNotEmpty &&
+              _addressController.text.isNotEmpty &&
+              _phoneController.text.isNotEmpty &&
+              _termsAccepted;
         }
       default:
         return true;
     }
   }
 
+  /// 🔹 Aquí agregamos la lógica real de registro
+  Future<void> _register() async {
+    final body = {
+      "email": _emailController.text.trim(),
+      "password": _passwordController.text.trim(),
+      "role": _selectedType?.toLowerCase(), // "cliente" o "negocio"
+      "phone": _phoneController.text.trim(),
+      if (_selectedType == "Negocio") ...{
+        "business_name": _businessNameController.text.trim(),
+        "nit": _nitController.text.trim(),
+        "address": _addressController.text.trim(),
+        "description": _descriptionController.text.trim(),
+      }
+    };
+
+    try {
+      final result = await _authService.register(body);
+
+      if (!mounted) return;
+
+      // Ir a la pantalla principal
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MainScreen(
+            toggleTheme: () {},
+            isDarkMode: false,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+    }
+  }
+
   Widget _buildStepIndicator() {
     final theme = Theme.of(context);
-    // Both Cliente and Negocio now have 3 steps total
     int totalSteps = 3;
-    
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20),
       child: Row(
@@ -135,7 +145,6 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         children: List.generate(totalSteps, (index) {
           bool isActive = index <= _currentStep;
           bool isCurrent = index == _currentStep;
-          
           return Row(
             children: [
               Container(
@@ -143,27 +152,28 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                 height: 32,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isActive 
-                    ? theme.colorScheme.primary 
-                    : theme.colorScheme.outline.withValues(alpha: 0.3),
-                  border: isCurrent 
-                    ? Border.all(color: theme.colorScheme.primary, width: 3)
-                    : null,
+                  color: isActive
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.outline.withValues(alpha: 0.3),
+                  border: isCurrent
+                      ? Border.all(color: theme.colorScheme.primary, width: 3)
+                      : null,
                 ),
                 child: Center(
                   child: isActive
-                    ? Icon(
-                        index < _currentStep ? Icons.check : Icons.circle,
-                        color: Colors.white,
-                        size: 16,
-                      )
-                    : Text(
-                        '${index + 1}',
-                        style: TextStyle(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                          fontWeight: FontWeight.bold,
+                      ? Icon(
+                          index < _currentStep ? Icons.check : Icons.circle,
+                          color: Colors.white,
+                          size: 16,
+                        )
+                      : Text(
+                          '${index + 1}',
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.6),
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
                 ),
               ),
               if (index < totalSteps - 1)
@@ -171,9 +181,9 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                   width: 40,
                   height: 2,
                   margin: const EdgeInsets.symmetric(horizontal: 8),
-                  color: index < _currentStep 
-                    ? theme.colorScheme.primary 
-                    : theme.colorScheme.outline.withValues(alpha: 0.3),
+                  color: index < _currentStep
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.outline.withValues(alpha: 0.3),
                 ),
             ],
           );
@@ -183,116 +193,52 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   }
 
   Widget _buildUserTypeSelection() {
-    final theme = Theme.of(context);
-    
     return Column(
       children: [
-        Text(
-          "¿Cómo quieres usar la app?",
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-          textAlign: TextAlign.center,
-        ),
+        const Text("¿Cómo quieres usar la app?",
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 32),
-        
-        _buildTypeCard(
-          type: "Cliente",
-          title: "Soy Cliente",
-          subtitle: "Quiero descubrir y conectar con negocios locales",
-          icon: Icons.person_outline,
-          theme: theme,
-        ),
+        _buildTypeCard("Cliente", Icons.person_outline,
+            "Soy Cliente", "Quiero descubrir negocios locales"),
         const SizedBox(height: 16),
-        
-        _buildTypeCard(
-          type: "Negocio",
-          title: "Tengo un Negocio",
-          subtitle: "Quiero hacer mi negocio más visible y conectar con clientes",
-          icon: Icons.store_outlined,
-          theme: theme,
-        ),
+        _buildTypeCard("Negocio", Icons.store_outlined, "Tengo un Negocio",
+            "Quiero hacer visible mi negocio"),
       ],
     );
   }
 
-  Widget _buildTypeCard({
-    required String type,
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required ThemeData theme,
-  }) {
+  Widget _buildTypeCard(
+      String type, IconData icon, String title, String subtitle) {
+    final theme = Theme.of(context);
     bool isSelected = _selectedType == type;
-    
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedType = type;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+      onTap: () => setState(() => _selectedType = type),
+      child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           border: Border.all(
-            color: isSelected 
-              ? theme.colorScheme.primary 
-              : theme.colorScheme.outline.withValues(alpha: 0.3),
-            width: isSelected ? 2 : 1,
-          ),
+              color:
+                  isSelected ? theme.colorScheme.primary : theme.colorScheme.outline),
           borderRadius: BorderRadius.circular(16),
-          color: isSelected 
-            ? theme.colorScheme.primary.withValues(alpha: 0.1)
-            : theme.colorScheme.surface,
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isSelected 
-                  ? theme.colorScheme.primary.withValues(alpha: 0.2)
-                  : theme.colorScheme.outline.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                color: isSelected 
-                  ? theme.colorScheme.primary 
-                  : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                size: 32,
-              ),
-            ),
+            Icon(icon,
+                color: isSelected ? theme.colorScheme.primary : Colors.grey),
             const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: isSelected 
-                        ? theme.colorScheme.primary 
-                        : theme.colorScheme.onSurface,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              Icon(
-                Icons.check_circle,
-                color: theme.colorScheme.primary,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isSelected
+                            ? theme.colorScheme.primary
+                            : Colors.black)),
+                Text(subtitle,
+                    style: TextStyle(color: Colors.grey.shade600)),
+              ],
+            )
           ],
         ),
       ),
@@ -300,225 +246,79 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   }
 
   Widget _buildAccountInfo() {
-    final theme = Theme.of(context);
-    
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "Información de la cuenta",
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 24),
-        
         TextField(
           controller: _emailController,
-          keyboardType: TextInputType.emailAddress,
-          decoration: InputDecoration(
-            labelText: "Correo electrónico",
-            hintText: "ejemplo@correo.com",
-            prefixIcon: const Icon(Icons.email_outlined),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+          decoration: const InputDecoration(labelText: "Correo electrónico"),
         ),
         const SizedBox(height: 16),
-        
         TextField(
           controller: _passwordController,
           obscureText: true,
-          decoration: InputDecoration(
-            labelText: "Contraseña",
-            prefixIcon: const Icon(Icons.lock_outlined),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+          decoration: const InputDecoration(labelText: "Contraseña"),
         ),
         const SizedBox(height: 16),
-        
         TextField(
           controller: _confirmPasswordController,
           obscureText: true,
-          decoration: InputDecoration(
-            labelText: "Confirmar contraseña",
-            prefixIcon: const Icon(Icons.lock_outline),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            errorText: _passwordController.text != _confirmPasswordController.text && 
-                      _confirmPasswordController.text.isNotEmpty
-              ? "Las contraseñas no coinciden"
-              : null,
-          ),
+          decoration: const InputDecoration(labelText: "Confirmar contraseña"),
         ),
       ],
     );
   }
 
   Widget _buildClientFinalStep() {
-    final theme = Theme.of(context);
-
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "Información de contacto",
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 24),
-
         TextField(
           controller: _phoneController,
-          keyboardType: TextInputType.phone,
-          decoration: InputDecoration(
-            labelText: "Teléfono de contacto",
-            prefixIcon: const Icon(Icons.phone_outlined),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+          decoration: const InputDecoration(labelText: "Teléfono"),
         ),
-        const SizedBox(height: 24),
-
+        const SizedBox(height: 16),
         _buildTermsCheckbox(),
       ],
     );
   }
 
   Widget _buildBusinessFinalStep() {
-    final theme = Theme.of(context);
-    
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "Información del negocio",
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 24),
-        
         TextField(
           controller: _businessNameController,
-          decoration: InputDecoration(
-            labelText: "Nombre del negocio",
-            prefixIcon: const Icon(Icons.store_outlined),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+          decoration: const InputDecoration(labelText: "Nombre del negocio"),
         ),
         const SizedBox(height: 16),
-        
         TextField(
           controller: _nitController,
-          decoration: InputDecoration(
-            labelText: "NIT / Documento",
-            prefixIcon: const Icon(Icons.badge_outlined),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+          decoration: const InputDecoration(labelText: "NIT / Documento"),
         ),
         const SizedBox(height: 16),
-        
-        TextField(
-          controller: _descriptionController,
-          maxLines: 3,
-          decoration: InputDecoration(
-            labelText: "Descripción del negocio",
-            hintText: "Cuéntanos brevemente sobre tu negocio...",
-            prefixIcon: const Icon(Icons.description_outlined),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        
         TextField(
           controller: _addressController,
-          decoration: InputDecoration(
-            labelText: "Dirección del negocio",
-            prefixIcon: const Icon(Icons.location_on_outlined),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+          decoration: const InputDecoration(labelText: "Dirección"),
         ),
         const SizedBox(height: 16),
-        
         TextField(
           controller: _phoneController,
-          keyboardType: TextInputType.phone,
-          decoration: InputDecoration(
-            labelText: "Teléfono de contacto",
-            prefixIcon: const Icon(Icons.phone_outlined),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+          decoration: const InputDecoration(labelText: "Teléfono"),
         ),
-        const SizedBox(height: 24),
-        
+        const SizedBox(height: 16),
+        TextField(
+          controller: _descriptionController,
+          decoration: const InputDecoration(labelText: "Descripción"),
+        ),
+        const SizedBox(height: 16),
         _buildTermsCheckbox(),
       ],
     );
   }
 
   Widget _buildTermsCheckbox() {
-    final theme = Theme.of(context);
-    
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Checkbox(
-          value: _termsAccepted,
-          onChanged: (val) {
-            setState(() => _termsAccepted = val ?? false);
-          },
-        ),
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              setState(() => _termsAccepted = !_termsAccepted);
-            },
-            child: Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: RichText(
-                text: TextSpan(
-                  style: theme.textTheme.bodyMedium,
-                  children: [
-                    const TextSpan(text: "Acepto los "),
-                    TextSpan(
-                      text: "términos y condiciones",
-                      style: TextStyle(
-                        color: theme.colorScheme.primary,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                    const TextSpan(text: " y la "),
-                    TextSpan(
-                      text: "política de privacidad",
-                      style: TextStyle(
-                        color: theme.colorScheme.primary,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
+    return CheckboxListTile(
+      value: _termsAccepted,
+      onChanged: (val) => setState(() => _termsAccepted = val ?? false),
+      title: const Text("Acepto los términos y condiciones"),
     );
   }
 
@@ -529,9 +329,9 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
       case 1:
         return _buildAccountInfo();
       case 2:
-        return _selectedType == "Cliente" 
-          ? _buildClientFinalStep()
-          : _buildBusinessFinalStep();
+        return _selectedType == "Cliente"
+            ? _buildClientFinalStep()
+            : _buildBusinessFinalStep();
       default:
         return Container();
     }
@@ -539,22 +339,15 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // Both user types now have 3 steps total
     int totalSteps = 3;
     bool isLastStep = _currentStep == totalSteps - 1;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Crear cuenta"),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-      ),
+      appBar: AppBar(title: const Text("Crear cuenta")),
       body: SafeArea(
         child: Column(
           children: [
             _buildStepIndicator(),
-            
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -569,63 +362,30 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                 ),
               ),
             ),
-            
-            // Navigation buttons
             Container(
               padding: const EdgeInsets.all(24),
               child: Row(
                 children: [
                   if (_currentStep > 0)
-                    Expanded(
-                      flex: 1,
-                      child: OutlinedButton(
-                        onPressed: _previousStep,
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text("Atrás"),
-                      ),
-                    ),
-                  
-                  if (_currentStep > 0) const SizedBox(width: 16),
-                  
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      onPressed: _canProceed() 
+                    OutlinedButton(
+                        onPressed: _previousStep, child: const Text("Atrás")),
+                  const Spacer(),
+                  ElevatedButton(
+                    onPressed: _canProceed()
                         ? () {
                             if (isLastStep) {
-                              // Complete registration
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("¡Cuenta creada exitosamente!"),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
+                              _register(); // 🔹 ahora sí registra
                             } else {
                               _nextStep();
                             }
                           }
                         : null,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        isLastStep ? "Crear cuenta" : "Siguiente",
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
+                    child:
+                        Text(isLastStep ? "Crear cuenta" : "Siguiente"),
                   ),
                 ],
               ),
-            ),
+            )
           ],
         ),
       ),

@@ -4,9 +4,11 @@ import 'navigation/bottom_navigation.dart';
 import 'pages/home_page.dart';
 import 'pages/petitions_page.dart';
 import 'pages/profile_page.dart';
-import 'pages/login_page.dart'; // 👈 importar login
+import 'pages/login_page.dart';
+import 'services/session.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'services/supabase.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +17,11 @@ void main() async {
 
   final accessToken = dotenv.env['MAPBOX_ACCESS_TOKEN'] ?? '';
   MapboxOptions.setAccessToken(accessToken);
+
+  await SupabaseService.init(
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+  );
 
   runApp(const MainApp());
 }
@@ -28,6 +35,29 @@ class MainApp extends StatefulWidget {
 
 class _MainAppState extends State<MainApp> {
   bool _isDarkMode = false;
+  bool _isLoading = true;
+  bool _isLoggedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkSession();
+  }
+
+  Future<void> _checkSession() async {
+    try {
+      final session = await SessionService.getSession();
+      setState(() {
+        _isLoggedIn = session != null;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoggedIn = false;
+        _isLoading = false;
+      });
+    }
+  }
 
   void toggleTheme() {
     setState(() {
@@ -42,9 +72,56 @@ class _MainAppState extends State<MainApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      // 👇 login es la primera pantalla
-      home: LoginPage(),
+      home: _isLoading
+          ? const LoadingScreen()
+          : _isLoggedIn
+              ? MainScreen(
+                  toggleTheme: toggleTheme,
+                  isDarkMode: _isDarkMode,
+                )
+              : const LoginPage(),
       debugShowCheckedModeBanner: false,
+    );
+  }
+}
+
+class LoadingScreen extends StatelessWidget {
+  const LoadingScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.handshake_outlined,
+                size: 48,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            CircularProgressIndicator(
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Cargando...',
+              style: TextStyle(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

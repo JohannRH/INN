@@ -24,65 +24,55 @@ class BusinessCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              // Icon box
+              // Logo
               Container(
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha:0.10),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
+                  image: business.logoUrl != null
+                      ? DecorationImage(
+                          image: NetworkImage(business.logoUrl!),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
-                child: Icon(_getCategoryIcon(business.category),
-                    color: theme.colorScheme.primary, size: 28),
+                child: business.logoUrl == null
+                    ? Icon(Icons.business, color: theme.colorScheme.primary, size: 28)
+                    : null,
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            business.name,
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: business.isOpen ? Colors.green.withValues(alpha:0.12) : Colors.red.withValues(alpha:0.12),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            business.isOpen ? 'Open' : 'Closed',
-                            style: TextStyle(
-                                color: business.isOpen ? Colors.green : Colors.red,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ],
+                    Text(
+                      business.name,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 6),
-                    Text(business.category, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha:0.7))),
-                    const SizedBox(height: 6),
-                    Text(business.description, style: theme.textTheme.bodyMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.location_on_outlined, size: 14, color: theme.colorScheme.onSurface.withValues(alpha:0.6)),
-                        const SizedBox(width: 6),
-                        Text('${business.distance.toStringAsFixed(1)} km', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: .65))),
-                        const Spacer(),
-                        const Icon(Icons.star, size: 14, color: Colors.amber),
-                        const SizedBox(width: 4),
-                        Text(business.rating.toString(), style: theme.textTheme.bodySmall),
-                      ],
-                    ),
+                    if (business.address != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        business.address!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                    if (business.description != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        business.description!,
+                        style: theme.textTheme.bodyMedium,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ],
                 ),
               )
@@ -91,24 +81,5 @@ class BusinessCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  IconData _getCategoryIcon(String category) {
-    switch (category.toLowerCase()) {
-      case 'restaurant':
-      case 'food':
-        return Icons.restaurant;
-      case 'retail':
-      case 'shop':
-        return Icons.store;
-      case 'service':
-        return Icons.build;
-      case 'health':
-        return Icons.local_hospital;
-      case 'beauty':
-        return Icons.face;
-      default:
-        return Icons.business;
-    }
   }
 }

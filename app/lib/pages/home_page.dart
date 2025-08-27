@@ -4,6 +4,8 @@ import '../models/business.dart';
 import '../components/search_bar.dart';
 import '../widgets/business_list.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,56 +17,14 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final TextEditingController _searchController = TextEditingController();
 
-  final List<Business> _businesses = [
-    Business(
-      id: '1',
-      name: 'Local Coffee Shop',
-      category: 'Restaurant',
-      description: 'Artisanal coffee and fresh pastries. Perfect for morning meetings.',
-      address: '123 Main St',
-      distance: 0.5,
-      imageUrl: '',
-      rating: 4.5,
-      isOpen: true,
-      tags: ['Coffee', 'Breakfast', 'WiFi'],
-    ),
-    Business(
-      id: '2',
-      name: 'Green Garden Market',
-      category: 'Retail',
-      description: 'Fresh organic produce and local products. Supporting local farmers.',
-      address: '456 Oak Ave',
-      distance: 1.2,
-      imageUrl: '',
-      rating: 4.8,
-      isOpen: true,
-      tags: ['Organic', 'Local', 'Fresh'],
-    ),
-    Business(
-      id: '3',
-      name: 'Tech Solutions Pro',
-      category: 'Service',
-      description: 'Professional IT services and computer repair. Quick turnaround guaranteed.',
-      address: '789 Tech Blvd',
-      distance: 2.1,
-      imageUrl: '',
-      rating: 4.2,
-      isOpen: false,
-      tags: ['IT', 'Repair', 'Support'],
-    ),
-    Business(
-      id: '4',
-      name: 'Beauty & Wellness Spa',
-      category: 'Beauty',
-      description: 'Relaxing spa treatments and beauty services. Book your appointment today.',
-      address: '321 Wellness Way',
-      distance: 0.8,
-      imageUrl: '',
-      rating: 4.7,
-      isOpen: true,
-      tags: ['Spa', 'Beauty', 'Relaxation'],
-    ),
-  ];
+   Future<List<Business>> fetchBusinesses() async {
+    final response = await Supabase.instance.client
+        .from('businesses')
+        .select();
+
+    final data = response as List<dynamic>;
+    return data.map((json) => Business.fromJson(json)).toList();
+  }
 
   @override
   void dispose() {
@@ -119,8 +79,19 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               // Business list
-              BusinessList(
-                businesses: _businesses
+              
+              // Lista de negocios desde Supabase
+              FutureBuilder<List<Business>>(
+                future: fetchBusinesses(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.data!.isEmpty) {
+                    return const Center(child: Text("No businesses found"));
+                  }
+                  return BusinessList(businesses: snapshot.data!);
+                },
               ),
             ],
           ),

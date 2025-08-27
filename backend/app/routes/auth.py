@@ -1,71 +1,26 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 from app.services.supabase_client import supabase, supabase_admin
+from app.schemas.auth import RegisterRequest, LoginRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-# -------- SCHEMAS --------
-class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str
-    name: str
-    role: str  # "cliente" o "negocio"
-    phone: str | None = None
-    avatar_url: str | None = None
-
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
 
 # -------- ENDPOINTS --------
 @router.post("/register")
 def register_user(data: RegisterRequest):
     try:
-        # First, check if user already exists in auth
-        auth_users = supabase_admin.auth.admin.list_users()
-        existing_user = None
-        for user in auth_users:
-            if user.email == data.email:
-                existing_user = user
-                break
-        
-        if existing_user:
-            # Check if profile exists
-            profile_response = supabase_admin.table("profiles").select("*").eq("id", existing_user.id).execute()
-            
-            if profile_response.data:
-                raise HTTPException(status_code=400, detail="El usuario ya existe completamente")
-            else:
-                # User exists in auth but not in profiles, create profile only
-                profile_response = supabase_admin.table("profiles").insert({
-                    "id": existing_user.id,
-                    "role": data.role,
-                    "name": data.name,
-                    "email": data.email,
-                    "phone": data.phone,
-                    "avatar_url": data.avatar_url
-                }).execute()
-                
-                return {
-                    "message": "Perfil creado para usuario existente", 
-                    "user_id": existing_user.id
-                }
-        
-        # User doesn't exist, create new user
+        # 1. Crear usuario en auth
         auth_response = supabase_admin.auth.admin.create_user({
             "email": data.email,
             "password": data.password,
             "email_confirm": True
         })
-
         if auth_response.user is None:
             raise HTTPException(status_code=400, detail="No se pudo crear el usuario")
 
         user_id = auth_response.user.id
 
-        # Create profile
+        # 2. Crear perfil en profiles
         profile_response = supabase_admin.table("profiles").insert({
             "id": user_id,
             "role": data.role,
@@ -75,15 +30,31 @@ def register_user(data: RegisterRequest):
             "avatar_url": data.avatar_url
         }).execute()
 
+        # 3. Si es negocio → crear también en businesses
+        if data.role == "negocio":
+            # OJO: necesitarás ampliar RegisterRequest con los campos de negocio
+            business_data = {
+                "user_id": user_id,
+                "name": getattr(data, "business_name", None),
+                "nit": getattr(data, "nit", None),
+                "address": getattr(data, "address", None),
+                "description": getattr(data, "description", None),
+                "logo_url": getattr(data, "avatar_url", None)
+            }
+            business_response = supabase_admin.table("businesses").insert(business_data).execute()
+
+            return {
+                "message": "Negocio registrado correctamente",
+                "user_id": user_id,
+                "business": business_response.data[0]
+            }
+
         return {
-            "message": "Usuario registrado correctamente", 
+            "message": "Cliente registrado correctamente",
             "user_id": user_id
         }
-        
-    except HTTPException:
-        raise
+
     except Exception as e:
-        # If user creation succeeded but profile creation failed, clean up
         if 'user_id' in locals():
             try:
                 supabase_admin.auth.admin.delete_user(user_id)

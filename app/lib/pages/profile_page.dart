@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/business.dart';
 import '../components/business_card.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProfilePage extends StatefulWidget {
   final VoidCallback toggleTheme;
@@ -17,32 +18,12 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final List<Business> _favoriteBusinesses = [
-    Business(
-      id: '1',
-      name: 'Local Coffee Shop',
-      category: 'Restaurant',
-      description: 'Artisanal coffee and fresh pastries. Perfect for morning meetings.',
-      address: '123 Main St',
-      distance: 0.5,
-      imageUrl: '',
-      rating: 4.5,
-      isOpen: true,
-      tags: ['Coffee', 'Breakfast', 'WiFi'],
-    ),
-    Business(
-      id: '2',
-      name: 'Green Garden Market',
-      category: 'Retail',
-      description: 'Fresh organic produce and local products. Supporting local farmers.',
-      address: '456 Oak Ave',
-      distance: 1.2,
-      imageUrl: '',
-      rating: 4.8,
-      isOpen: true,
-      tags: ['Organic', 'Local', 'Fresh'],
-    ),
-  ];
+  Future<List<Business>> fetchFavoriteBusinesses() async {
+    // 👇 Más adelante lo cambiamos a favoritos reales
+    final response = await Supabase.instance.client.from('businesses').select().limit(2);
+    final data = response as List<dynamic>;
+    return data.map((json) => Business.fromJson(json)).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -234,32 +215,57 @@ class _ProfilePageState extends State<ProfilePage> {
                       ],
                     ),
                   ),
-                  if (_favoriteBusinesses.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Center(
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.favorite_border,
-                              size: 48,
-                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                  FutureBuilder<List<Business>>(
+                    future: fetchFavoriteBusinesses(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: CircularProgressIndicator(),
+                          ),
+                        );
+                      }
+
+                      if (snapshot.hasError) {
+                        return Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text("Error loading favorites: ${snapshot.error}"),
+                        );
+                      }
+
+                      final favorites = snapshot.data ?? [];
+
+                      if (favorites.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Center(
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.favorite_border,
+                                  size: 48,
+                                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'No favorite businesses yet',
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'No favorite businesses yet',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    ..._favoriteBusinesses.take(2).map((business) => BusinessCard(
-                          business: business
-                        )),
+                          ),
+                        );
+                      }
+
+                      // mostrar solo 2 favoritos como preview
+                      return Column(
+                        children: favorites.take(2).map((b) => BusinessCard(business: b)).toList(),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
