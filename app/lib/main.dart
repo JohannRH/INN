@@ -46,9 +46,9 @@ class _MainAppState extends State<MainApp> {
 
   Future<void> _checkSession() async {
     try {
-      final session = await SessionService.getSession();
+      final isValid = await SessionService.hasValidSession();
       setState(() {
-        _isLoggedIn = session != null;
+        _isLoggedIn = isValid;
         _isLoading = false;
       });
     } catch (e) {

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/auth.dart';
 import '../main.dart';
+import '../services/session.dart';
+import 'package:country_code_picker/country_code_picker.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -13,8 +15,10 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   int _currentStep = 0;
   String? _selectedType;
   bool _termsAccepted = false;
+  bool _isLoading = false;
 
   // Controllers
+  final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -22,7 +26,24 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   final _nitController = TextEditingController();
   final _addressController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _descriptionController = TextEditingController();
+
+  // Password visibility
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+
+  // Password strength tracking
+  int _passwordStrength = 0;
+  List<bool> _passwordCriteria = List.filled(5, false);
+
+  // Error states
+  String? _fullNameError;
+  String? _emailError;
+  String? _passwordError;
+  String? _confirmPasswordError;
+  String? _businessNameError;
+  String? _nitError;
+  String? _addressError;
+  String? _phoneError;
 
   late AnimationController _animationController;
   late Animation<double> _slideAnimation;
@@ -40,10 +61,19 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
     _animationController.forward();
+
+    // Add listeners for real-time validation
+    _fullNameController.addListener(_validateFullName);
+    _emailController.addListener(_validateEmail);
+    _passwordController.addListener(_validatePassword);
+    _confirmPasswordController.addListener(_validateConfirmPassword);
+    _phoneController.addListener(_validatePhone);
+    _nitController.addListener(_validateNit);
   }
 
   @override
   void dispose() {
+    _fullNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -51,9 +81,146 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     _nitController.dispose();
     _addressController.dispose();
     _phoneController.dispose();
-    _descriptionController.dispose();
     _animationController.dispose();
     super.dispose();
+  }
+
+  // Validation methods
+  void _validateFullName() {
+    setState(() {
+      if (_fullNameController.text.isEmpty) {
+        _fullNameError = "Este campo es obligatorio";
+      } else {
+        _fullNameError = null;
+      }
+    });
+  }
+
+  void _validateEmail() {
+    setState(() {
+      if (_emailController.text.isEmpty) {
+        _emailError = null;
+      } else if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+          .hasMatch(_emailController.text)) {
+        _emailError = "Ingresa un correo válido";
+      } else {
+        _emailError = null;
+      }
+    });
+  }
+
+  void _validatePassword() {
+    setState(() {
+      String password = _passwordController.text;
+      _passwordCriteria = List.filled(5, false);
+      _passwordStrength = 0;
+      
+      if (password.isEmpty) {
+        _passwordError = null;
+        return;
+      }
+
+      // Check each criteria
+      if (password.length >= 8) {
+        _passwordCriteria[0] = true;
+        _passwordStrength++;
+      }
+      
+      if (RegExp(r'[a-z]').hasMatch(password)) {
+        _passwordCriteria[1] = true;
+        _passwordStrength++;
+      }
+      
+      if (RegExp(r'[A-Z]').hasMatch(password)) {
+        _passwordCriteria[2] = true;
+        _passwordStrength++;
+      }
+      
+      if (RegExp(r'\d').hasMatch(password)) {
+        _passwordCriteria[3] = true;
+        _passwordStrength++;
+      }
+      
+      if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) {
+        _passwordCriteria[4] = true;
+        _passwordStrength++;
+      }
+
+      // Password is valid if it meets at least 4 out of 5 criteria (80%)
+      if (_passwordStrength >= 4) {
+        _passwordError = null;
+      } else {
+        _passwordError = null; // Don't show error, just show progress
+      }
+    });
+  }
+
+  void _validateConfirmPassword() {
+    setState(() {
+      if (_confirmPasswordController.text.isEmpty) {
+        _confirmPasswordError = null;
+      } else if (_passwordController.text != _confirmPasswordController.text) {
+        _confirmPasswordError = "Las contraseñas no coinciden";
+      } else {
+        _confirmPasswordError = null;
+      }
+    });
+  }
+
+  void _validatePhone() {
+    setState(() {
+      if (_phoneController.text.isEmpty) {
+        _phoneError = null;
+      } else if (!RegExp(r'^\d{10}$').hasMatch(_phoneController.text)) {
+        _phoneError = "Ingresa un número de 10 dígitos";
+      } else {
+        _phoneError = null;
+      }
+    });
+  }
+
+  void _validateNit() {
+    setState(() {
+      if (_nitController.text.isEmpty) {
+        _nitError = null;
+      } else if (!RegExp(r'^\d{8,15}$').hasMatch(_nitController.text)) {
+        _nitError = "NIT debe tener entre 8-15 dígitos";
+      } else {
+        _nitError = null;
+      }
+    });
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
   }
 
   void _nextStep() {
@@ -64,6 +231,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
       _animationController.reset();
       _animationController.forward();
     }
+    // No need for else block - individual field validations already show specific errors
   }
 
   void _previousStep() {
@@ -84,34 +252,50 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         return _emailController.text.isNotEmpty &&
             _passwordController.text.isNotEmpty &&
             _confirmPasswordController.text.isNotEmpty &&
-            _passwordController.text == _confirmPasswordController.text;
+            _passwordController.text == _confirmPasswordController.text &&
+            _emailError == null &&
+            _passwordStrength >= 4 &&
+            _confirmPasswordError == null;
       case 2:
         if (_selectedType == "Cliente") {
-          return _phoneController.text.isNotEmpty && _termsAccepted;
+          return _phoneController.text.isNotEmpty && 
+                _termsAccepted &&
+                _phoneError == null;
         } else {
           return _businessNameController.text.isNotEmpty &&
               _nitController.text.isNotEmpty &&
               _addressController.text.isNotEmpty &&
               _phoneController.text.isNotEmpty &&
-              _termsAccepted;
+              _termsAccepted &&
+              _businessNameError == null &&
+              _nitError == null &&
+              _addressError == null &&
+              _phoneError == null;
         }
       default:
         return true;
     }
   }
 
-  /// 🔹 Aquí agregamos la lógica real de registro
+  String _selectedDialCode = "+57"; // por defecto Colombia
+
   Future<void> _register() async {
+    if (_isLoading) return;
+    
+    setState(() {
+      _isLoading = true;
+    });
+
     final body = {
+      "name": _fullNameController.text.trim(),
       "email": _emailController.text.trim(),
       "password": _passwordController.text.trim(),
       "role": _selectedType?.toLowerCase(), // "cliente" o "negocio"
-      "phone": _phoneController.text.trim(),
+      "phone": "$_selectedDialCode${_phoneController.text.trim()}",
       if (_selectedType == "Negocio") ...{
         "business_name": _businessNameController.text.trim(),
         "nit": _nitController.text.trim(),
         "address": _addressController.text.trim(),
-        "description": _descriptionController.text.trim(),
       }
     };
 
@@ -120,8 +304,16 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
 
       if (!mounted) return;
 
-      // Ir a la pantalla principal
-      Navigator.pushReplacement(
+      final token = result['access_token'];
+      final user = result['user'];
+
+      await SessionService.saveSession(token, user);
+
+      if (!mounted) return;
+
+      _showSuccessSnackBar("¡Cuenta creada exitosamente!");
+      
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (_) => MainScreen(
@@ -129,10 +321,32 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
             isDarkMode: false,
           ),
         ),
+        (route) => false,
       );
     } catch (e) {
       if (!mounted) return;
+      
+      // Only show meaningful error messages from server responses
+      _showErrorSnackBar(_parseError(e.toString()));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  // This method provides meaningful error messages based on server responses
+  String _parseError(String error) {
+    if (error.contains('email already exists')) {
+      return 'Este correo ya está registrado';
+    } else if (error.contains('network')) {
+      return 'Error de conexión. Verifica tu internet';
+    } else if (error.contains('timeout')) {
+      return 'La solicitud tardó demasiado. Inténtalo de nuevo';
+    }
+    return 'Error al crear la cuenta: $error';
   }
 
   Widget _buildStepIndicator() {
@@ -245,24 +459,287 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String labelText,
+    String? hintText,
+    String? errorText,
+    bool obscureText = false,
+    TextInputType? keyboardType,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+    int? maxLines = 1,
+    bool enabled = true,
+  }) {
+    final theme = Theme.of(context);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: controller,
+          obscureText: obscureText,
+          keyboardType: keyboardType,
+          maxLines: maxLines,
+          enabled: enabled && !_isLoading,
+          decoration: InputDecoration(
+            labelText: labelText,
+            hintText: hintText,
+            prefixIcon: prefixIcon,
+            suffixIcon: suffixIcon,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            filled: true,
+            fillColor: theme.colorScheme.surface,
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: errorText != null ? Colors.red : theme.colorScheme.primary,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Colors.red),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Colors.red),
+            ),
+          ),
+        ),
+        if (errorText != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8, left: 12),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    errorText,
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPasswordStrengthIndicator() {
+    if (_passwordController.text.isEmpty) return const SizedBox.shrink();
+    
+    String strengthText;
+    Color strengthColor;
+    
+    if (_passwordStrength <= 2) {
+      strengthText = "Débil";
+      strengthColor = Colors.red;
+    } else if (_passwordStrength == 3) {
+      strengthText = "Regular";
+      strengthColor = Colors.orange;
+    } else if (_passwordStrength == 4) {
+      strengthText = "Buena";
+      strengthColor = Colors.green;
+    } else {
+      strengthText = "Excelente";
+      strengthColor = Colors.green.shade600;
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "Seguridad",
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            Text(
+              strengthText,
+              style: TextStyle(
+                fontSize: 12,
+                color: strengthColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 6,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(3),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: _passwordStrength / 5,
+              backgroundColor: Colors.transparent,
+              valueColor: AlwaysStoppedAnimation<Color>(strengthColor),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Column(
+          children: [
+            _buildRequirementItem("Al menos 8 caracteres", _passwordCriteria[0]),
+            _buildRequirementItem("Una letra minúscula (a-z)", _passwordCriteria[1]),
+            _buildRequirementItem("Una letra mayúscula (A-Z)", _passwordCriteria[2]),
+            _buildRequirementItem("Un número (0-9)", _passwordCriteria[3]),
+            _buildRequirementItem("Un símbolo (!@#\$%^&*)", _passwordCriteria[4]),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRequirementItem(String text, bool met) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(
+            met ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 16,
+            color: met ? Colors.green : Colors.grey.shade400,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                color: met ? Colors.grey.shade700 : Colors.grey.shade500,
+                fontWeight: met ? FontWeight.w500 : FontWeight.normal,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAccountInfo() {
     return Column(
       children: [
-        TextField(
+        _buildTextField(
+          controller: _fullNameController,
+          labelText: _selectedType == "Cliente"
+              ? "Nombre completo"
+              : "Nombre del representante",
+          errorText: _fullNameError,
+          prefixIcon: const Icon(Icons.person_outline),
+        ),
+        const SizedBox(height: 20),
+        _buildTextField(
           controller: _emailController,
-          decoration: const InputDecoration(labelText: "Correo electrónico"),
+          labelText: "Correo electrónico",
+          hintText: "ejemplo@correo.com",
+          errorText: _emailError,
+          keyboardType: TextInputType.emailAddress,
+          prefixIcon: const Icon(Icons.email_outlined),
         ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _passwordController,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: "Contraseña"),
+        const SizedBox(height: 20),
+        Column(
+          children: [
+            _buildTextField(
+              controller: _passwordController,
+              labelText: "Contraseña",
+              errorText: _passwordError,
+              obscureText: _obscurePassword,
+              prefixIcon: const Icon(Icons.lock_outlined),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+                onPressed: _isLoading ? null : () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              ),
+            ),
+            _buildPasswordStrengthIndicator(),
+          ],
         ),
-        const SizedBox(height: 16),
-        TextField(
+        const SizedBox(height: 20),
+        _buildTextField(
           controller: _confirmPasswordController,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: "Confirmar contraseña"),
+          labelText: "Confirmar contraseña",
+          errorText: _confirmPasswordError,
+          obscureText: _obscureConfirmPassword,
+          prefixIcon: const Icon(Icons.lock_outlined),
+          suffixIcon: IconButton(
+            icon: Icon(
+              _obscureConfirmPassword
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+            ),
+            onPressed: _isLoading ? null : () {
+              setState(() {
+                _obscureConfirmPassword = !_obscureConfirmPassword;
+              });
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPhoneField() {
+    final theme = Theme.of(context);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.colorScheme.outline),
+                borderRadius: BorderRadius.circular(16),
+                color: theme.colorScheme.surface,
+              ),
+              child: CountryCodePicker(
+                onChanged: (country) {
+                  setState(() {
+                    _selectedDialCode = country.dialCode ?? "+57";
+                  });
+                },
+                initialSelection: 'CO',
+                favorite: ['+57'],
+                showFlag: true,
+                showDropDownButton: true,
+                alignLeft: false,
+                enabled: !_isLoading,
+                flagWidth: 25,
+                padding: const EdgeInsets.symmetric(horizontal: 0),
+                textStyle: const TextStyle(fontSize: 14),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildTextField(
+                controller: _phoneController,
+                labelText: "Teléfono",
+                errorText: _phoneError,
+                keyboardType: TextInputType.phone,
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -271,11 +748,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   Widget _buildClientFinalStep() {
     return Column(
       children: [
-        TextField(
-          controller: _phoneController,
-          decoration: const InputDecoration(labelText: "Teléfono"),
-        ),
-        const SizedBox(height: 16),
+        _buildPhoneField(),
+        const SizedBox(height: 20),
         _buildTermsCheckbox(),
       ],
     );
@@ -284,31 +758,30 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   Widget _buildBusinessFinalStep() {
     return Column(
       children: [
-        TextField(
+        _buildTextField(
           controller: _businessNameController,
-          decoration: const InputDecoration(labelText: "Nombre del negocio"),
+          labelText: "Nombre del negocio",
+          errorText: _businessNameError,
+          prefixIcon: const Icon(Icons.store_outlined),
         ),
-        const SizedBox(height: 16),
-        TextField(
+        const SizedBox(height: 20),
+        _buildTextField(
           controller: _nitController,
-          decoration: const InputDecoration(labelText: "NIT / Documento"),
+          labelText: "NIT / Documento",
+          errorText: _nitError,
+          keyboardType: TextInputType.number,
+          prefixIcon: const Icon(Icons.numbers),
         ),
-        const SizedBox(height: 16),
-        TextField(
+        const SizedBox(height: 20),
+        _buildTextField(
           controller: _addressController,
-          decoration: const InputDecoration(labelText: "Dirección"),
+          labelText: "Dirección",
+          errorText: _addressError,
+          prefixIcon: const Icon(Icons.location_on_outlined),
         ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _phoneController,
-          decoration: const InputDecoration(labelText: "Teléfono"),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _descriptionController,
-          decoration: const InputDecoration(labelText: "Descripción"),
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
+        _buildPhoneField(),
+        const SizedBox(height: 20),
         _buildTermsCheckbox(),
       ],
     );
@@ -317,8 +790,12 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   Widget _buildTermsCheckbox() {
     return CheckboxListTile(
       value: _termsAccepted,
-      onChanged: (val) => setState(() => _termsAccepted = val ?? false),
+      onChanged: _isLoading
+          ? null
+          : (val) => setState(() => _termsAccepted = val ?? false),
       title: const Text("Acepto los términos y condiciones"),
+      controlAffinity: ListTileControlAffinity.leading,
+      activeColor: Theme.of(context).colorScheme.primary,
     );
   }
 
@@ -339,6 +816,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     int totalSteps = 3;
     bool isLastStep = _currentStep == totalSteps - 1;
 
@@ -348,6 +826,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         child: Column(
           children: [
             _buildStepIndicator(),
+            const SizedBox(height: 30),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -367,21 +846,70 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
               child: Row(
                 children: [
                   if (_currentStep > 0)
-                    OutlinedButton(
-                        onPressed: _previousStep, child: const Text("Atrás")),
+                    SizedBox(
+                      child: OutlinedButton(
+                        onPressed: _isLoading ? null : _previousStep,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          side: BorderSide(
+                            color: theme.colorScheme.primary,
+                            width: 2,
+                          ),
+                        ),
+                        child: const Text("Atrás"),
+                      ),
+                    ),
                   const Spacer(),
-                  ElevatedButton(
-                    onPressed: _canProceed()
-                        ? () {
-                            if (isLastStep) {
-                              _register(); // 🔹 ahora sí registra
-                            } else {
-                              _nextStep();
+                  SizedBox(
+                    child: ElevatedButton(
+                      onPressed: (_canProceed() && !_isLoading)
+                          ? () {
+                              if (isLastStep) {
+                                _register();
+                              } else {
+                                _nextStep();
+                              }
                             }
-                          }
-                        : null,
-                    child:
-                        Text(isLastStep ? "Crear cuenta" : "Siguiente"),
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.colorScheme.primary,
+                        foregroundColor: theme.colorScheme.onPrimary,
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 2,
+                      ),
+                      child: _isLoading
+                          ? SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: theme.colorScheme.onPrimary,
+                              ),
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  isLastStep ? "Crear cuenta" : "Siguiente",
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  isLastStep ? Icons.check : Icons.arrow_forward, 
+                                  size: 18
+                                ),
+                              ],
+                            ),
+                    ),
                   ),
                 ],
               ),

@@ -14,6 +14,8 @@ dependencies:
   supabase_flutter: ^2.0.0
   http: ^1.2.2
   shared_preferences: ^2.2.3
+  flutter_secure_storage: ^9.2.2
+  country_code_picker: ^3.4.0
 
 dev_dependencies:
   flutter_test:

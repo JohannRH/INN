@@ -9,7 +9,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/register")
 def register_user(data: RegisterRequest):
     try:
-        # 1. Crear usuario en auth
         auth_response = supabase_admin.auth.admin.create_user({
             "email": data.email,
             "password": data.password,
@@ -20,8 +19,8 @@ def register_user(data: RegisterRequest):
 
         user_id = auth_response.user.id
 
-        # 2. Crear perfil en profiles
-        profile_response = supabase_admin.table("profiles").insert({
+        # Crear perfil
+        supabase_admin.table("profiles").insert({
             "id": user_id,
             "role": data.role,
             "name": data.name,
@@ -30,30 +29,34 @@ def register_user(data: RegisterRequest):
             "avatar_url": data.avatar_url
         }).execute()
 
-        # 3. Si es negocio → crear también en businesses
+        # Si es negocio → crear también en businesses
         if data.role == "negocio":
-            # OJO: necesitarás ampliar RegisterRequest con los campos de negocio
-            business_data = {
+            supabase_admin.table("businesses").insert({
                 "user_id": user_id,
                 "name": getattr(data, "business_name", None),
                 "nit": getattr(data, "nit", None),
                 "address": getattr(data, "address", None),
                 "description": getattr(data, "description", None),
                 "logo_url": getattr(data, "avatar_url", None)
-            }
-            business_response = supabase_admin.table("businesses").insert(business_data).execute()
+            }).execute()
 
-            return {
-                "message": "Negocio registrado correctamente",
-                "user_id": user_id,
-                "business": business_response.data[0]
-            }
+        # Iniciar sesión para devolver token
+        login_response = supabase.auth.sign_in_with_password(
+            {"email": data.email, "password": data.password}
+        )
+
+        if login_response.user is None:
+            raise HTTPException(status_code=400, detail="Error al iniciar sesión después del registro")
 
         return {
-            "message": "Cliente registrado correctamente",
-            "user_id": user_id
+            "access_token": login_response.session.access_token,
+            "refresh_token": login_response.session.refresh_token,
+            "user": {
+                "id": login_response.user.id,
+                "email": login_response.user.email,
+                "role": data.role
+            }
         }
-
     except Exception as e:
         if 'user_id' in locals():
             try:
