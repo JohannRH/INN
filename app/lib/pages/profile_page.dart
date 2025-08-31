@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/business.dart';
 import '../components/business_card.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/session.dart';
+import './login_page.dart';
 
 class ProfilePage extends StatefulWidget {
   final VoidCallback toggleTheme;
@@ -18,15 +20,52 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  Map<String, dynamic>? _session;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSession();
+  }
+
+  Future<void> _loadSession() async {
+    final session = await SessionService.getSession();
+
+    if (session != null) {
+      final userId = session["user"]["id"];
+      final response = await Supabase.instance.client
+          .from("profiles")
+          .select("name,email")
+          .eq("id", userId)
+          .maybeSingle();
+
+      if (response != null) {
+        session["user"]["name"] = response["name"];
+        session["user"]["email"] = response["email"];
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _session = session;
+    });
+  }
+
   Future<List<Business>> fetchFavoriteBusinesses() async {
-    // 👇 Más adelante lo cambiamos a favoritos reales
-    final response = await Supabase.instance.client.from('businesses').select().limit(2);
+    final response = await Supabase.instance.client
+        .from('businesses')
+        .select()
+        .limit(2);
+
     final data = response as List<dynamic>;
     return data.map((json) => Business.fromJson(json)).toList();
   }
 
   @override
   Widget build(BuildContext context) {
+    final userName = _session?['user']?['name'] ?? 'Guest';
+    final userEmail = _session?['user']?['email'] ?? '';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Profile'),
@@ -72,7 +111,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'John Doe',
+                          userName,
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -80,27 +119,9 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'john.doe@email.com',
+                          userEmail,
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: Colors.white.withValues(alpha: 0.8),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            'Premium Member',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                            ),
                           ),
                         ),
                       ],
@@ -352,30 +373,38 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _showSignOutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: const Text('Cancel'),
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Sign Out'),
+      content: const Text('Are you sure you want to sign out?'),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            // Store the navigator before the async operation
+            final navigator = Navigator.of(context);
+            
+            await SessionService.clearSession();
+            
+            navigator.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const LoginPage()),
+              (route) => false,
+            );
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
           ),
-          ElevatedButton(
-            onPressed: () {
-              
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Sign Out'),
-          ),
-        ],
-      ),
-    );
-  }
+          child: const Text('Sign Out'),
+        ),
+      ],
+    ),
+  );
+}
 }
