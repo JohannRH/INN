@@ -4,6 +4,7 @@ import '../components/business_card.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/session.dart';
 import './login_page.dart';
+import './edit_profile_page.dart';
 
 class ProfilePage extends StatefulWidget {
   final VoidCallback toggleTheme;
@@ -35,13 +36,15 @@ class _ProfilePageState extends State<ProfilePage> {
       final userId = session["user"]["id"];
       final response = await Supabase.instance.client
           .from("profiles")
-          .select("name,email")
+          .select("name,email,role,avatar_url")
           .eq("id", userId)
           .maybeSingle();
 
       if (response != null) {
         session["user"]["name"] = response["name"];
         session["user"]["email"] = response["email"];
+        session["user"]["role"] = response["role"];
+        session["user"]["avatar_url"] = response["avatar_url"];
       }
     }
 
@@ -71,8 +74,15 @@ class _ProfilePageState extends State<ProfilePage> {
         title: const Text('Profile'),
         actions: [
           IconButton(
-            onPressed: () {
+            onPressed: () async {
+              final updated = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const EditProfilePage()),
+              );
 
+              if (updated == true) {
+                _loadSession();
+              }
             },
             icon: const Icon(Icons.edit),
           ),
@@ -99,23 +109,31 @@ class _ProfilePageState extends State<ProfilePage> {
                   CircleAvatar(
                     radius: 40,
                     backgroundColor: Colors.white.withValues(alpha: 0.2),
-                    child: const Icon(
-                      Icons.person,
-                      size: 40,
-                      color: Colors.white,
-                    ),
+                    backgroundImage: _session?['user']?['avatar_url'] != null
+                        ? NetworkImage(_session!['user']!['avatar_url'])
+                        : null,
+                    child: _session?['user']?['avatar_url'] == null
+                        ? const Icon(Icons.person, size: 40, color: Colors.white)
+                        : null,
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          userName,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              userName,
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            if (_session?['user']?['role'] == 'negocio')
+                              const Icon(Icons.store, color: Colors.white, size: 20),
+                          ],
                         ),
                         const SizedBox(height: 4),
                         Text(
