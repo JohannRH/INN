@@ -3,6 +3,7 @@ import '../services/auth.dart';
 import '../main.dart';
 import '../services/session.dart';
 import 'package:country_code_picker/country_code_picker.dart';
+import './map_location_picker_page.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -26,6 +27,10 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   final _nitController = TextEditingController();
   final _addressController = TextEditingController();
   final _phoneController = TextEditingController();
+
+  double? _latitude;
+  double? _longitude;
+
 
   // Password visibility
   bool _obscurePassword = true;
@@ -69,6 +74,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     _confirmPasswordController.addListener(_validateConfirmPassword);
     _phoneController.addListener(_validatePhone);
     _nitController.addListener(_validateNit);
+    _addressController.addListener(_validateAddress);
   }
 
   @override
@@ -191,6 +197,36 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     });
   }
 
+  void _validateAddress() {
+    setState(() {
+      if (_addressController.text.isEmpty) {
+        _addressError = "Este campo es obligatorio";
+      } else {
+        _addressError = null;
+      }
+    });
+  }
+
+  Future<void> _openMapForAddress() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapLocationPickerPage(
+          initialLat: _latitude ?? 6.25184, // Default to Medellín
+          initialLng: _longitude ?? -75.56359,
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _addressController.text = result["address"] ?? "";
+        _latitude = result["lat"];
+        _longitude = result["lng"];
+      });
+    }
+  }
+
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
     
@@ -296,6 +332,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
         "business_name": _businessNameController.text.trim(),
         "nit": _nitController.text.trim(),
         "address": _addressController.text.trim(),
+        "latitude": _latitude,
+        "longitude": _longitude,
       }
     };
 
@@ -470,6 +508,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     Widget? suffixIcon,
     int? maxLines = 1,
     bool enabled = true,
+    bool readOnly = false,
+    VoidCallback? onTap,
   }) {
     final theme = Theme.of(context);
     
@@ -482,6 +522,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
           keyboardType: keyboardType,
           maxLines: maxLines,
           enabled: enabled && !_isLoading,
+          readOnly: readOnly,
+          onTap: onTap,
           decoration: InputDecoration(
             labelText: labelText,
             hintText: hintText,
@@ -777,7 +819,13 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
           controller: _addressController,
           labelText: "Dirección",
           errorText: _addressError,
+          readOnly: true,
           prefixIcon: const Icon(Icons.location_on_outlined),
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.map),
+            onPressed: _isLoading ? null : _openMapForAddress,
+          ),
+          onTap: _isLoading ? null : _openMapForAddress,
         ),
         const SizedBox(height: 20),
         _buildPhoneField(),

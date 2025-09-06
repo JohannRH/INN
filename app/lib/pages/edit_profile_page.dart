@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/session.dart';
 import '../components/image_editor.dart';
 import 'dart:io';
+import './map_location_picker_page.dart';
+import '../components/business_type_selector.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -23,10 +25,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _addressController = TextEditingController();
   final _descriptionController = TextEditingController();
 
+  double? _latitude;
+  double? _longitude;
+
   bool _isLoading = false;
   String? _role;
   String? _userId;
   String? _avatarUrl;
+
+  int? _selectedBusinessTypeId;
 
   @override
   void initState() {
@@ -53,11 +60,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
       _userId = userId;
     }
 
-    // Si es negocio → cargar datos de businesses
+    // If business, load business data including type_id
     if (_role == "negocio") {
       final business = await Supabase.instance.client
           .from("businesses")
-          .select("name,nit,address,description,logo_url")
+          .select("name,nit,address,description,logo_url,latitude,longitude,type_id")
           .eq("user_id", userId)
           .maybeSingle();
 
@@ -67,6 +74,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _addressController.text = business["address"] ?? "";
         _descriptionController.text = business["description"] ?? "";
         _avatarUrl = business["logo_url"] ?? _avatarUrl;
+        _latitude = (business["latitude"] as num?)?.toDouble();
+        _longitude = (business["longitude"] as num?)?.toDouble();
+        _selectedBusinessTypeId = business["type_id"];
       }
     }
 
@@ -83,7 +93,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       await Supabase.instance.client.storage
           .from('avatars')
-          .uploadBinary(fileName, fileBytes, fileOptions: const FileOptions(upsert: true));
+          .uploadBinary(fileName, fileBytes,
+              fileOptions: const FileOptions(upsert: true));
 
       return Supabase.instance.client.storage
           .from('avatars')
@@ -114,6 +125,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
           "address": _addressController.text,
           "description": _descriptionController.text,
           "logo_url": _avatarUrl,
+          "latitude": _latitude,
+          "longitude": _longitude,
+          "type_id": _selectedBusinessTypeId,
         }).eq("user_id", _userId!);
       }
 
@@ -148,6 +162,26 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
+  Future<void> _openMapForAddress() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapLocationPickerPage(
+          initialLat: _latitude ?? 6.25184,
+          initialLng: _longitude ?? -75.56359,
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _addressController.text = result["address"] ?? "";
+        _latitude = result["lat"];
+        _longitude = result["lng"];
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context).colorScheme;
@@ -167,30 +201,31 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   children: [
                     Center(
                       child: ProfileImageSelector(
-                        radius: 55,
-                        networkImageUrl: _avatarUrl,
-                        baseUrl: "",
-                        onImageSelected: (file) async {
-                          final url = await _uploadImage(file);
-                          if (url != null && mounted) {
-                            setState(() {
-                              _avatarUrl = url;
-                            });
-                          }
-                        }
-                      ),
+                          radius: 55,
+                          networkImageUrl: _avatarUrl,
+                          baseUrl: "",
+                          onImageSelected: (file) async {
+                            final url = await _uploadImage(file);
+                            if (url != null && mounted) {
+                              setState(() {
+                                _avatarUrl = url;
+                              });
+                            }
+                          }),
                     ),
                     const SizedBox(height: 20),
 
                     // Personal Information
-                    _buildSectionHeader("Información Personal", Icons.person_outline),
+                    _buildSectionHeader(
+                        "Información Personal", Icons.person_outline),
                     TextFormField(
                       controller: _nameController,
                       decoration: const InputDecoration(
                         labelText: "Nombre completo",
                         prefixIcon: Icon(Icons.person),
                       ),
-                      validator: (v) => v == null || v.isEmpty ? "Requerido" : null,
+                      validator: (v) =>
+                          v == null || v.isEmpty ? "Requerido" : null,
                     ),
                     const SizedBox(height: 16),
 
@@ -205,14 +240,26 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
                     // Business Information
                     if (_role == "negocio") ...[
-                      _buildSectionHeader("Información del Negocio", Icons.business),
+                      _buildSectionHeader(
+                          "Información del Negocio", Icons.business),
                       TextFormField(
                         controller: _businessNameController,
                         decoration: const InputDecoration(
                           labelText: "Nombre del negocio",
                           prefixIcon: Icon(Icons.store),
                         ),
-                        validator: (v) => v == null || v.isEmpty ? "Requerido" : null,
+                        validator: (v) =>
+                            v == null || v.isEmpty ? "Requerido" : null,
+                      ),
+                      const SizedBox(height: 16),
+                      BusinessTypeSelector(
+                        selectedTypeId: _selectedBusinessTypeId,
+                        onChanged: (typeId, typeName) {
+                          setState(() {
+                            _selectedBusinessTypeId = typeId;
+                          });
+                        },
+                        enabled: !_isLoading,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
@@ -224,11 +271,41 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         keyboardType: TextInputType.number,
                       ),
                       const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _addressController,
-                        decoration: const InputDecoration(
-                          labelText: "Dirección",
-                          prefixIcon: Icon(Icons.location_on),
+
+                      // Dirección con botón para mapa
+                      GestureDetector(
+                        onTap: _openMapForAddress,
+                        child: AbsorbPointer(
+                          child: TextFormField(
+                            controller: _addressController,
+                            readOnly: true,
+                            decoration: InputDecoration(
+                              labelText: "Dirección",
+                              prefixIcon: const Icon(Icons.location_on),
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.map),
+                                onPressed: () async {
+                                  final result = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => MapLocationPickerPage(
+                                        initialLat: _latitude ?? 6.25184,
+                                        initialLng: _longitude ?? -75.56359,
+                                      ),
+                                    ),
+                                  );
+
+                                  if (result != null) {
+                                    setState(() {
+                                      _addressController.text = result["address"];
+                                      _latitude = result["lat"];
+                                      _longitude = result["lng"];
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -253,7 +330,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Text("Guardar"),
                       ),
