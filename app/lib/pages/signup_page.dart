@@ -4,6 +4,7 @@ import '../main.dart';
 import '../services/session.dart';
 import 'package:country_code_picker/country_code_picker.dart';
 import './map_location_picker_page.dart';
+import '../components/business_type_selector.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -31,6 +32,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   double? _latitude;
   double? _longitude;
 
+  int? _selectedBusinessTypeId;
 
   // Password visibility
   bool _obscurePassword = true;
@@ -302,6 +304,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
               _nitController.text.isNotEmpty &&
               _addressController.text.isNotEmpty &&
               _phoneController.text.isNotEmpty &&
+              _selectedBusinessTypeId != null && 
               _termsAccepted &&
               _businessNameError == null &&
               _nitError == null &&
@@ -330,6 +333,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
       "phone": "$_selectedDialCode${_phoneController.text.trim()}",
       if (_selectedType == "Negocio") ...{
         "business_name": _businessNameController.text.trim(),
+        "type_id": _selectedBusinessTypeId,
         "nit": _nitController.text.trim(),
         "address": _addressController.text.trim(),
         "latitude": _latitude,
@@ -805,6 +809,19 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
           labelText: "Nombre del negocio",
           errorText: _businessNameError,
           prefixIcon: const Icon(Icons.store_outlined),
+        ),
+        const SizedBox(height: 20),
+        BusinessTypeSelector(
+          selectedTypeId: _selectedBusinessTypeId,
+          onChanged: (typeId, typeName) {
+            setState(() {
+              _selectedBusinessTypeId = typeId;
+            });
+          },
+          enabled: !_isLoading,
+          errorText: _selectedBusinessTypeId == null
+              ? "Selecciona el tipo de negocio"
+              : null,
         ),
         const SizedBox(height: 20),
         _buildTextField(

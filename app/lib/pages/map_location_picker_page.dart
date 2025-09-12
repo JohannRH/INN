@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../components/search_bar.dart';
+import '../components/base_map.dart';
+
 
 class MapLocationPickerPage extends StatefulWidget {
   final double? initialLat;
@@ -207,12 +209,18 @@ class _MapLocationPickerPageState extends State<MapLocationPickerPage> {
       body: Stack(
         children: [
           // --- Mapa ---
-          MapWidget(
-            key: const ValueKey("map-picker"),
-            cameraOptions: _cameraOptions!,
+          BaseMap(
+            initialCamera: _cameraOptions,
             onMapCreated: (map) {
               _mapboxMap = map;
             },
+            showUser: true,
+            followUser: false,
+            children: const [
+              Center(
+                child: Icon(Icons.location_on, color: Colors.red, size: 40),
+              ),
+            ],
           ),
           // --- Pin fijo ---
           const Center(

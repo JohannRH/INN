@@ -8,6 +8,8 @@ class Business {
   final String? logoUrl;
   final double? latitude;
   final double? longitude;
+  final int? typeId;
+  final int? categoryId;
 
   Business({
     required this.id,
@@ -19,6 +21,8 @@ class Business {
     this.logoUrl,
     this.latitude,
     this.longitude,
+    this.typeId,
+    this.categoryId,
   });
 
   factory Business.fromJson(Map<String, dynamic> json) {
@@ -32,6 +36,8 @@ class Business {
       logoUrl: json['logo_url'],
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
+      typeId: json['type_id'],
+      categoryId: json['category_id'],
     );
   }
 }

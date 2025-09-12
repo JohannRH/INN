@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../components/search_bar.dart';
 
 class BusinessTypeSelector extends StatefulWidget {
   final int? selectedTypeId;
@@ -273,23 +274,15 @@ class _BusinessTypeModalState extends State<BusinessTypeModal> {
           ),
           
           // Search bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Buscar tipo de negocio...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                filled: true,
-                fillColor: theme.colorScheme.outline.withValues(alpha: 0.1),
-              ),
-            ),
+          CustomSearchBar(
+            controller: _searchController,
+            hintText: 'Buscar tipo de negocio...',
+            onChanged: (_) => _filterTypes(),
+            elevation: 2,
+            borderRadius: BorderRadius.circular(12),
+            backgroundColor: theme.colorScheme.outline.withValues(alpha: 0.1),
+            prefixIcon: Icons.search,
           ),
-          
           const SizedBox(height: 16),
           
           // List
