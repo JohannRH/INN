@@ -10,6 +10,7 @@ class Business {
   final double? longitude;
   final int? typeId;
   final int? categoryId;
+  final Map<String, dynamic>? openingHours;
 
   Business({
     required this.id,
@@ -23,6 +24,7 @@ class Business {
     this.longitude,
     this.typeId,
     this.categoryId,
+    this.openingHours,
   });
 
   factory Business.fromJson(Map<String, dynamic> json) {
@@ -38,6 +40,9 @@ class Business {
       longitude: (json['longitude'] as num?)?.toDouble(),
       typeId: json['type_id'],
       categoryId: json['category_id'],
+      openingHours: json['opening_hours'] != null
+          ? Map<String, dynamic>.from(json['opening_hours'])
+          : null,
     );
   }
 }

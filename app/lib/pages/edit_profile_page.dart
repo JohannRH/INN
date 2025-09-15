@@ -5,6 +5,7 @@ import '../components/image_editor.dart';
 import 'dart:io';
 import './map_location_picker_page.dart';
 import '../components/business_type_selector.dart';
+import '../widgets/opening_hours_editor.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -35,6 +36,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   int? _selectedBusinessTypeId;
 
+  Map<String, Map<String, String>> _openingHours = {
+    "monday": {"open": "", "close": ""},
+    "tuesday": {"open": "", "close": ""},
+    "wednesday": {"open": "", "close": ""},
+    "thursday": {"open": "", "close": ""},
+    "friday": {"open": "", "close": ""},
+    "saturday": {"open": "", "close": ""},
+    "sunday": {"open": "", "close": ""},
+  };
+
   @override
   void initState() {
     super.initState();
@@ -64,7 +75,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     if (_role == "negocio") {
       final business = await Supabase.instance.client
           .from("businesses")
-          .select("name,nit,address,description,logo_url,latitude,longitude,type_id")
+          .select("name,nit,address,description,logo_url,latitude,longitude,type_id,opening_hours")
           .eq("user_id", userId)
           .maybeSingle();
 
@@ -77,6 +88,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
         _latitude = (business["latitude"] as num?)?.toDouble();
         _longitude = (business["longitude"] as num?)?.toDouble();
         _selectedBusinessTypeId = business["type_id"];
+        if (business["opening_hours"] != null) {
+          _openingHours = Map<String, Map<String, String>>.from(
+            (business["opening_hours"] as Map).map(
+              (key, value) =>
+                  MapEntry(key, Map<String, String>.from(value as Map)),
+            ),
+          );
+        }
       }
     }
 
@@ -128,6 +147,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           "latitude": _latitude,
           "longitude": _longitude,
           "type_id": _selectedBusinessTypeId,
+          "opening_hours": _openingHours,
         }).eq("user_id", _userId!);
       }
 
@@ -284,25 +304,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                               prefixIcon: const Icon(Icons.location_on),
                               suffixIcon: IconButton(
                                 icon: const Icon(Icons.map),
-                                onPressed: () async {
-                                  final result = await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => MapLocationPickerPage(
-                                        initialLat: _latitude ?? 6.25184,
-                                        initialLng: _longitude ?? -75.56359,
-                                      ),
-                                    ),
-                                  );
-
-                                  if (result != null) {
-                                    setState(() {
-                                      _addressController.text = result["address"];
-                                      _latitude = result["lat"];
-                                      _longitude = result["lng"];
-                                    });
-                                  }
-                                },
+                                onPressed: _openMapForAddress,
                               ),
                             ),
                           ),
@@ -316,6 +318,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
                           prefixIcon: Icon(Icons.description),
                         ),
                         maxLines: 3,
+                      ),
+
+                      // Horarios
+                      _buildSectionHeader(
+                          "Horario de Atención", Icons.access_time),
+                      OpeningHoursEditor(
+                        openingHours: _openingHours,
+                        onChanged: (hours) {
+                          setState(() {
+                            _openingHours = hours;
+                          });
+                        },
                       ),
                     ],
 
