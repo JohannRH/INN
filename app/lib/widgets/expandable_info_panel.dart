@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class ExpandableInfoPanel extends StatelessWidget {
+class ExpandableInfoPanel extends StatefulWidget {
   final List<Widget> children;
   final double initialChildSize;
   final double minChildSize;
@@ -17,13 +17,44 @@ class ExpandableInfoPanel extends StatelessWidget {
   });
 
   @override
+  State<ExpandableInfoPanel> createState() => ExpandableInfoPanelState();
+}
+
+class ExpandableInfoPanelState extends State<ExpandableInfoPanel> {
+  late DraggableScrollableController _dragController;
+
+  @override
+  void initState() {
+    super.initState();
+    _dragController = DraggableScrollableController();
+  }
+
+  @override
+  void dispose() {
+    _dragController.dispose();
+    super.dispose();
+  }
+
+  /// Method to reset the panel to its initial size
+  void resetToInitialSize() {
+    if (_dragController.isAttached) {
+      _dragController.animateTo(
+        widget.initialChildSize,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return DraggableScrollableSheet(
-      initialChildSize: initialChildSize,
-      minChildSize: minChildSize,
-      maxChildSize: maxChildSize,
-      snap: snap,
+      controller: _dragController,
+      initialChildSize: widget.initialChildSize,
+      minChildSize: widget.minChildSize,
+      maxChildSize: widget.maxChildSize,
+      snap: widget.snap,
       builder: (context, scrollController) {
         return Container(
           decoration: BoxDecoration(
@@ -61,7 +92,7 @@ class ExpandableInfoPanel extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: children,
+                  children: widget.children,
                 ),
               ),
               const SizedBox(height: 24),

@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../themes/business_icons.dart';
 import '../widgets/bitmap.dart';
 import '../components/base_map.dart';
+import '../widgets/business_details_sheet.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,22 +18,72 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+class _HomePageState extends State<HomePage> 
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   bool _locationGranted = false;
   bool _deniedForever = false;
+
+  Business? _selectedBusiness;
+
+  final Map<String, Business> _markerBusinessMap = {};
+  
+  final GlobalKey<ExpandableInfoPanelState> _panelKey =
+      GlobalKey<ExpandableInfoPanelState>();
+
+  // Animation controllers for the transition
+  late AnimationController _panelAnimationController;
+  late AnimationController _detailsAnimationController;
+  
+  // Animations
+  late Animation<Offset> _panelSlideAnimation;
+  late Animation<Offset> _detailsSlideAnimation;
+  
+  bool _showBusinessDetailsB = false;
+  bool _isTransitioning = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkLocationPermission();
+    
+    // Initialize animation controllers
+    _panelAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    
+    _detailsAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    
+    // Panel slides down (out of view)
+    _panelSlideAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: const Offset(0.0, 1.0), // Slide down completely
+    ).animate(CurvedAnimation(
+      parent: _panelAnimationController,
+      curve: Curves.easeInOutCubic,
+    ));
+    
+    // Details sheet slides up from bottom
+    _detailsSlideAnimation = Tween<Offset>(
+      begin: const Offset(0.0, 1.0), // Start below screen
+      end: Offset.zero, // End at normal position
+    ).animate(CurvedAnimation(
+      parent: _detailsAnimationController,
+      curve: Curves.easeInOutCubic,
+    ));
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _searchController.dispose(); 
+    _searchController.dispose();
+    _panelAnimationController.dispose();
+    _detailsAnimationController.dispose();
     super.dispose();
   }
 
@@ -79,11 +130,71 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<List<Business>> fetchBusinesses() async {
     final response = await Supabase.instance.client
-        .from('businesses')
-        .select('*, business_types(category_id)');
+    .from('businesses')
+    .select('''
+      *,
+      business_types(
+        id,
+        name,
+        business_categories(id, name)
+      ),
+      profiles(phone, email, avatar_url)
+    ''');
 
     final data = response as List<dynamic>;
     return data.map((json) => Business.fromJson(json)).toList();
+  }
+
+  void _showBusinessDetails(Business business) async {
+    if (_isTransitioning) return; // Prevent multiple taps during transition
+    
+    setState(() {
+      _selectedBusiness = business;
+      _isTransitioning = true;
+    });
+    
+    // Start the panel slide down animation
+    await _panelAnimationController.forward();
+    
+    // Show the business details and start its animation
+    setState(() {
+      _showBusinessDetailsB = true;
+    });
+    
+    // Start the details slide up animation
+    await _detailsAnimationController.forward();
+    
+    setState(() {
+      _isTransitioning = false;
+    });
+  }
+
+  void _hideBusinessDetails() async {
+    if (_isTransitioning) return; // Prevent multiple taps during transition
+    
+    setState(() {
+      _isTransitioning = true;
+    });
+    
+    // Start the details slide down animation
+    await _detailsAnimationController.reverse();
+    
+    // Hide the business details
+    setState(() {
+      _showBusinessDetailsB = false;
+    });
+
+    _panelKey.currentState?.resetToInitialSize();
+    
+    // Start the panel slide up animation
+    await _panelAnimationController.reverse();
+
+    if (mounted) {
+      setState(() {
+        _selectedBusiness = null;
+        _isTransitioning = false;
+      });
+    }
   }
 
   @override
@@ -96,27 +207,64 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ? _buildMapWidget()
                 : _buildLocationPermissionScreen(),
           ),
-          // Only show the panel when location is granted
+          
+          // Expandable Info Panel with slide animation
           if (_locationGranted)
-            ExpandableInfoPanel(
-              initialChildSize: 0.18,
-              minChildSize: 0.18,
-              maxChildSize: 0.85,
-              children: [
-                _buildPromoBanner(context),
-                FutureBuilder<List<Business>>(
-                  future: fetchBusinesses(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.data!.isEmpty) {
-                      return const Center(child: Text("No businesses found"));
-                    }
-                    return BusinessList(businesses: snapshot.data!);
-                  },
-                ),
-              ],
+            AnimatedBuilder(
+              animation: _panelSlideAnimation,
+              builder: (context, child) {
+                return SlideTransition(
+                  position: _panelSlideAnimation,
+                  child: ExpandableInfoPanel(
+                    key: _panelKey,
+                    initialChildSize: 0.18,
+                    minChildSize: 0.18,
+                    maxChildSize: 0.85,
+                    children: [
+                      _buildPromoBanner(context),
+                      FutureBuilder<List<Business>>(
+                        future: fetchBusinesses(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          if (snapshot.data!.isEmpty) {
+                            return const Center(child: Text("No businesses found"));
+                          }
+                          return BusinessList(
+                            businesses: snapshot.data!,
+                            onTap: _showBusinessDetails,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          
+          // Business Details Sheet with slide animation
+          if (_locationGranted && _showBusinessDetailsB && _selectedBusiness != null)
+            AnimatedBuilder(
+              animation: _detailsSlideAnimation,
+              builder: (context, child) {
+                return SlideTransition(
+                  position: _detailsSlideAnimation,
+                  child: DraggableScrollableSheet(
+                    initialChildSize: 0.6,
+                    minChildSize: 0.5,
+                    maxChildSize: 0.8,
+                    snap: true,
+                    builder: (context, scrollController) {
+                      return BusinessDetailsSheet(
+                        business: _selectedBusiness!,
+                        onClose: _hideBusinessDetails,
+                        scrollController: scrollController,
+                      );
+                    },
+                  ),
+                );
+              },
             ),
         ],
       ),
@@ -408,7 +556,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Widget _buildMapWidget() {
     return FutureBuilder<geo.Position>(
-      future: geo.Geolocator.getCurrentPosition(), // ubicación al inicio
+      future: geo.Geolocator.getCurrentPosition(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -423,12 +571,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         );
 
         return BaseMap(
-          initialCamera: initialCamera, // arranca en ubicación del usuario
+          initialCamera: initialCamera,
           showUser: true,
           followUser: false,
           drawMarkers: (mapboxMap) async {
             final businesses = await fetchBusinesses();
             final manager = await mapboxMap.annotations.createPointAnnotationManager();
+
+            _markerBusinessMap.clear();
 
             for (final business in businesses) {
               if (business.latitude == null || business.longitude == null) continue;
@@ -441,7 +591,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 iconSize: 40,
               );
 
-              await manager.create(PointAnnotationOptions(
+              final annotation = await manager.create(PointAnnotationOptions(
                 geometry: Point(
                   coordinates: Position(business.longitude!, business.latitude!),
                 ),
@@ -453,7 +603,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 textHaloWidth: 1.5,
                 textOffset: [0, 2],
               ));
+
+               _markerBusinessMap[annotation.id.toString()] = business;
             }
+
+            manager.tapEvents(
+              onTap: (annotation) {
+                final business = _markerBusinessMap[annotation.id.toString()];
+                if (business != null) {
+                  _showBusinessDetails(business);
+                }
+                return true;
+              },
+            );
           },
           children: [
             SafeArea(

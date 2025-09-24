@@ -6,6 +6,7 @@ import 'dart:io';
 import './map_location_picker_page.dart';
 import '../components/business_type_selector.dart';
 import '../widgets/opening_hours_editor.dart';
+import '../services/user_cache.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -56,51 +57,99 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final session = await SessionService.getSession();
     if (session == null) return;
 
-    final userId = session["user"]["id"];
-    final response = await Supabase.instance.client
-        .from("profiles")
-        .select("name,phone,avatar_url,role")
-        .eq("id", userId)
-        .maybeSingle();
+    _userId = session["user"]["id"];
 
-    if (response != null) {
-      _nameController.text = response["name"] ?? "";
-      _phoneController.text = response["phone"] ?? "";
-      _avatarUrl = response["avatar_url"];
-      _role = response["role"];
-      _userId = userId;
-    }
+    // Try cache first
+    final cachedProfile = await UserCache.getProfile();
+    if (cachedProfile != null && await UserCache.isCacheRecent()) {
+      // Use cached data
+      _nameController.text = cachedProfile["name"] ?? "";
+      _phoneController.text = cachedProfile["phone"] ?? "";
+      _avatarUrl = cachedProfile["avatar_url"];
+      _role = cachedProfile["role"];
 
-    // If business, load business data including type_id
-    if (_role == "negocio") {
-      final business = await Supabase.instance.client
-          .from("businesses")
-          .select("name,nit,address,description,logo_url,latitude,longitude,type_id,opening_hours")
-          .eq("user_id", userId)
-          .maybeSingle();
-
-      if (business != null) {
-        _businessNameController.text = business["name"] ?? "";
-        _nitController.text = business["nit"] ?? "";
-        _addressController.text = business["address"] ?? "";
-        _descriptionController.text = business["description"] ?? "";
-        _avatarUrl = business["logo_url"] ?? _avatarUrl;
-        _latitude = (business["latitude"] as num?)?.toDouble();
-        _longitude = (business["longitude"] as num?)?.toDouble();
-        _selectedBusinessTypeId = business["type_id"];
-        if (business["opening_hours"] != null) {
-          _openingHours = Map<String, Map<String, String>>.from(
-            (business["opening_hours"] as Map).map(
-              (key, value) =>
-                  MapEntry(key, Map<String, String>.from(value as Map)),
-            ),
-          );
+      if (_role == "negocio") {
+        final cachedBusiness = await UserCache.getBusiness();
+        if (cachedBusiness != null) {
+          _businessNameController.text = cachedBusiness["name"] ?? "";
+          _nitController.text = cachedBusiness["nit"] ?? "";
+          _addressController.text = cachedBusiness["address"] ?? "";
+          _descriptionController.text = cachedBusiness["description"] ?? "";
+          _avatarUrl = cachedBusiness["logo_url"] ?? _avatarUrl;
+          _latitude = (cachedBusiness["latitude"] as num?)?.toDouble();
+          _longitude = (cachedBusiness["longitude"] as num?)?.toDouble();
+          _selectedBusinessTypeId = cachedBusiness["type_id"];
+          
+          if (cachedBusiness["opening_hours"] != null) {
+            _openingHours = Map<String, Map<String, String>>.from(
+              (cachedBusiness["opening_hours"] as Map).map(
+                (key, value) => MapEntry(key, Map<String, String>.from(value as Map)),
+              ),
+            );
+          }
         }
       }
+
+      if (mounted) setState(() {});
+      return;
     }
 
-    if (!mounted) return;
-    setState(() {});
+    // Fetch from database if cache is missing or old
+    await _fetchFromDatabase();
+  }
+
+  Future<void> _fetchFromDatabase() async {
+    try {
+      final response = await Supabase.instance.client
+          .from("profiles")
+          .select("id,name,phone,avatar_url,role,email")
+          .eq("id", _userId!)
+          .maybeSingle();
+
+      if (response != null) {
+        _nameController.text = response["name"] ?? "";
+        _phoneController.text = response["phone"] ?? "";
+        _avatarUrl = response["avatar_url"];
+        _role = response["role"];
+        
+        // Save to cache
+        await UserCache.saveProfile(response);
+      }
+
+      if (_role == "negocio") {
+        final business = await Supabase.instance.client
+            .from("businesses")
+            .select("id,name,nit,address,description,logo_url,latitude,longitude,type_id,opening_hours,user_id")
+            .eq("user_id", _userId!)
+            .maybeSingle();
+
+        if (business != null) {
+          _businessNameController.text = business["name"] ?? "";
+          _nitController.text = business["nit"] ?? "";
+          _addressController.text = business["address"] ?? "";
+          _descriptionController.text = business["description"] ?? "";
+          _avatarUrl = business["logo_url"] ?? _avatarUrl;
+          _latitude = (business["latitude"] as num?)?.toDouble();
+          _longitude = (business["longitude"] as num?)?.toDouble();
+          _selectedBusinessTypeId = business["type_id"];
+          
+          if (business["opening_hours"] != null) {
+            _openingHours = Map<String, Map<String, String>>.from(
+              (business["opening_hours"] as Map).map(
+                (key, value) => MapEntry(key, Map<String, String>.from(value as Map)),
+              ),
+            );
+          }
+          
+          // Save to cache
+          await UserCache.saveBusiness(business);
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching data: $e");
+    }
+
+    if (mounted) setState(() {});
   }
 
   /// Sube la imagen a Supabase Storage y devuelve la URL pública
@@ -130,7 +179,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     setState(() => _isLoading = true);
 
     try {
-      // update profiles
+      // Update database
       await Supabase.instance.client.from("profiles").update({
         "name": _nameController.text,
         "phone": _phoneController.text,
@@ -151,15 +200,59 @@ class _EditProfilePageState extends State<EditProfilePage> {
         }).eq("user_id", _userId!);
       }
 
-      if (!mounted) return;
-      Navigator.pop(context, true);
+      // Update cache with new data
+      await _updateCache();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Profile updated successfully"), backgroundColor: Colors.green),
+        );
+        Navigator.pop(context, true);
+      }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error al guardar: $e")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error saving: $e")),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _updateCache() async {
+    // Get existing cache to preserve all fields
+    final existingProfile = await UserCache.getProfile() ?? {};
+    
+    // Update profile cache with new data
+    final updatedProfile = {
+      ...existingProfile, // Keep all existing fields (email, id, etc.)
+      "name": _nameController.text,
+      "phone": _phoneController.text,
+      "avatar_url": _avatarUrl,
+      "role": _role,
+      "id": _userId,
+    };
+    await UserCache.saveProfile(updatedProfile);
+
+    // Update business cache if needed
+    if (_role == "negocio") {
+      final existingBusiness = await UserCache.getBusiness() ?? {};
+      
+      final updatedBusiness = {
+        ...existingBusiness, // Keep all existing fields
+        "name": _businessNameController.text,
+        "nit": _nitController.text,
+        "address": _addressController.text,
+        "description": _descriptionController.text,
+        "logo_url": _avatarUrl,
+        "latitude": _latitude,
+        "longitude": _longitude,
+        "type_id": _selectedBusinessTypeId,
+        "opening_hours": _openingHours,
+        "user_id": _userId,
+      };
+      await UserCache.saveBusiness(updatedBusiness);
     }
   }
 

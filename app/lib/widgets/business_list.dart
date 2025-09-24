@@ -4,10 +4,12 @@ import '../components/business_card.dart';
 
 class BusinessList extends StatelessWidget {
   final List<Business> businesses;
+  final Function(Business)? onTap;
 
   const BusinessList({
     super.key,
-    required this.businesses
+    required this.businesses,
+    this.onTap,
   });
 
   @override
@@ -28,6 +30,7 @@ class BusinessList extends StatelessWidget {
       children: businesses.map((b) {
         return BusinessCard(
           business: b,
+          onTap: () => onTap?.call(b),
         );
       }).toList(),
     );

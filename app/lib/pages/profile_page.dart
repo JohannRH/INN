@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/session.dart';
 import './login_page.dart';
 import './edit_profile_page.dart';
+import '../services/user_cache.dart';
 
 class ProfilePage extends StatefulWidget {
   final VoidCallback toggleTheme;
@@ -31,27 +32,51 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadSession() async {
     final session = await SessionService.getSession();
+    if (session == null) return;
 
-    if (session != null) {
-      final userId = session["user"]["id"];
-      final response = await Supabase.instance.client
-          .from("profiles")
-          .select("name,email,role,avatar_url")
-          .eq("id", userId)
-          .maybeSingle();
+    // Load cache
+    final cachedProfile = await UserCache.getProfile();
+    if (cachedProfile != null) {
+      session["user"].addAll(cachedProfile);
+      if (mounted) {
+        setState(() => _session = session);
+      }
+      
+      // Check if cache is recent
+      final isCacheRecent = await UserCache.isCacheRecent();
+      if (isCacheRecent) {
+        return;
+      }
+    }
 
-      if (response != null) {
-        session["user"]["name"] = response["name"];
-        session["user"]["email"] = response["email"];
-        session["user"]["role"] = response["role"];
-        session["user"]["avatar_url"] = response["avatar_url"];
+    // Call Supabase to get complete profile data
+    final userId = session["user"]["id"];
+    final response = await Supabase.instance.client
+        .from("profiles")
+        .select("id,name,email,role,avatar_url,phone")
+        .eq("id", userId)
+        .maybeSingle();
+
+    if (response != null) {
+      session["user"].addAll(response);
+      await UserCache.saveProfile(response);
+      
+      // Also fetch and cache business data if user is business
+      if (response["role"] == "negocio") {
+        final business = await Supabase.instance.client
+            .from("businesses")
+            .select("id,name,nit,address,description,logo_url,latitude,longitude,type_id,opening_hours,user_id")
+            .eq("user_id", userId)
+            .maybeSingle();
+        
+        if (business != null) {
+          await UserCache.saveBusiness(business);
+        }
       }
     }
 
     if (!mounted) return;
-    setState(() {
-      _session = session;
-    });
+    setState(() => _session = session);
   }
 
   Future<List<Business>> fetchFavoriteBusinesses() async {
@@ -408,7 +433,11 @@ class _ProfilePageState extends State<ProfilePage> {
             // Store the navigator before the async operation
             final navigator = Navigator.of(context);
             
-            await SessionService.clearSession();
+            // Clear session and cache
+            await Future.wait([
+              SessionService.clearSession(),
+              UserCache.clearAll(),
+            ]);
             
             navigator.pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => const LoginPage()),

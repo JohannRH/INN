@@ -54,7 +54,7 @@ class SessionService {
 
     return {
       "access_token": token,
-      "user": {
+      "user": <String, dynamic>{
         "id": id,
         "email": email,
       },

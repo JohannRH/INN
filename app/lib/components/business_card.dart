@@ -64,15 +64,15 @@ class BusinessCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (business.description != null) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        business.description!,
-                        style: theme.textTheme.bodyMedium,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                    // if (business.description != null) ...[
+                    //   const SizedBox(height: 6),
+                    //   Text(
+                    //     business.description!,
+                    //     style: theme.textTheme.bodyMedium,
+                    //     maxLines: 2,
+                    //     overflow: TextOverflow.ellipsis,
+                    //   ),
+                    // ],
                   ],
                 ),
               )
