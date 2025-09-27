@@ -142,12 +142,34 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+  String? _currentUserId;
+  GlobalKey _petitionsKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    _getCurrentUserId();
+  }
+
+  Future<void> _getCurrentUserId() async {
+    final session = await SessionService.getSession();
+    final newUserId = session?['user']?['id'];
+    
+    // If user changed, update the key to force rebuild
+    if (_currentUserId != null && _currentUserId != newUserId) {
+      setState(() {
+        _petitionsKey = GlobalKey(); // Force rebuild of PetitionsPage
+      });
+    }
+    
+    _currentUserId = newUserId;
+  }
 
   @override
   Widget build(BuildContext context) {
     final pages = [
       const HomePage(),
-      const PetitionsPage(),
+      PetitionsPage(key: _petitionsKey), // Use key to force rebuild on user change
       ProfilePage(
         toggleTheme: widget.toggleTheme,
         isDarkMode: widget.isDarkMode,
@@ -165,6 +187,11 @@ class _MainScreenState extends State<MainScreen> {
           setState(() {
             _currentIndex = index;
           });
+          
+          // Check for user changes when navigating to petitions
+          if (index == 1) {
+            _getCurrentUserId();
+          }
         },
       ),
     );

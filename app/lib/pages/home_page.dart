@@ -19,12 +19,14 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> 
-    with WidgetsBindingObserver, TickerProviderStateMixin {
+  with WidgetsBindingObserver, TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   bool _locationGranted = false;
   bool _deniedForever = false;
 
   Business? _selectedBusiness;
+
+  MapboxMap? _mapboxMap;
 
   final Map<String, Business> _markerBusinessMap = {};
   
@@ -197,6 +199,36 @@ class _HomePageState extends State<HomePage>
     }
   }
 
+  Future<void> _focusBusinessOnMap(Business business) async {
+    if (_mapboxMap == null || business.latitude == null || business.longitude == null) return;
+
+    final point = Point(
+      coordinates: Position(business.longitude!, business.latitude!),
+    );
+
+    await _mapboxMap!.flyTo(
+      CameraOptions(
+        center: point,
+        zoom: 17.5,
+      ),
+      MapAnimationOptions(duration: 800, startDelay: 0),
+    );
+
+    await _mapboxMap!.easeTo(
+      CameraOptions(
+        center: point,
+        zoom: 17.5,
+        padding: MbxEdgeInsets(
+          top: 0,
+          bottom: 100,
+          left: 0,
+          right: 0,
+        ),
+      ),
+      MapAnimationOptions(duration: 500, startDelay: 0),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -233,7 +265,10 @@ class _HomePageState extends State<HomePage>
                           }
                           return BusinessList(
                             businesses: snapshot.data!,
-                            onTap: _showBusinessDetails,
+                            onTap: (b) {
+                              _focusBusinessOnMap(b);
+                              _showBusinessDetails(b);
+                            },
                           );
                         },
                       ),
@@ -251,7 +286,7 @@ class _HomePageState extends State<HomePage>
                 return SlideTransition(
                   position: _detailsSlideAnimation,
                   child: DraggableScrollableSheet(
-                    initialChildSize: 0.6,
+                    initialChildSize: 0.5,
                     minChildSize: 0.5,
                     maxChildSize: 0.8,
                     snap: true,
@@ -574,6 +609,9 @@ class _HomePageState extends State<HomePage>
           initialCamera: initialCamera,
           showUser: true,
           followUser: false,
+          onMapCreated: (map) {
+            _mapboxMap = map;
+          },
           drawMarkers: (mapboxMap) async {
             final businesses = await fetchBusinesses();
             final manager = await mapboxMap.annotations.createPointAnnotationManager();
@@ -611,6 +649,7 @@ class _HomePageState extends State<HomePage>
               onTap: (annotation) {
                 final business = _markerBusinessMap[annotation.id.toString()];
                 if (business != null) {
+                  _focusBusinessOnMap(business);
                   _showBusinessDetails(business);
                 }
                 return true;

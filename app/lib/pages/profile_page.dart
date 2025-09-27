@@ -221,12 +221,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                   _buildDivider(),
                   _buildSettingsItem(
-                    icon: Icons.message,
-                    title: 'Messages',
-                    subtitle: 'View all your messages'
-                  ),
-                  _buildDivider(),
-                  _buildSettingsItem(
                     icon: Icons.local_offer,
                     title: 'Discounts',
                     subtitle: 'View available discounts'
