@@ -6,6 +6,8 @@ import '../components/petition_card.dart';
 import '../services/session.dart';
 import 'messages_page.dart';
 import '../services/user_cache.dart';
+import './chat_page.dart';
+import '../widgets/unread_messages_badge.dart';
 
 class PetitionsPage extends StatefulWidget {
   const PetitionsPage({super.key});
@@ -294,7 +296,7 @@ class PetitionsPageState extends State<PetitionsPage> {
             onPressed: refresh,
           ),
           IconButton(
-            icon: const Icon(Icons.message_outlined),
+            icon: const UnreadMessagesBadge(),
             onPressed: () {
               Navigator.push(
                 context,
@@ -335,12 +337,36 @@ class PetitionsPageState extends State<PetitionsPage> {
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: _petitions.length,
               itemBuilder: (context, index) {
+                final petition = _petitions[index];
                 return PetitionCard(
-                  petition: _petitions[index],
+                  petition: petition,
                   isBusinessView: _role == "negocio",
-                  onTap: () {},
+                  onTap: () async {
+                    final navigator = Navigator.of(context);
+                    final session = await SessionService.getSession();
+                    final myUserId = session?['user']?['id'];
+
+                    if (myUserId == null) return;
+
+                    String otherUserId;
+                    if (_role == "cliente") {
+                      otherUserId = petition.userId;
+                    } else {
+                      otherUserId = petition.userId;
+                    }
+
+                    navigator.push(
+                      MaterialPageRoute(
+                        builder: (_) => ChatPage(
+                          requestId: petition.id,
+                          otherUserId: otherUserId,
+                          title: petition.title,
+                        ),
+                      ),
+                    );
+                  },
                 );
-              },
+              }
             ),
           ),
         ),
