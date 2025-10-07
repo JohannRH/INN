@@ -342,14 +342,19 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
     };
 
     try {
-      final result = await _authService.register(body);
+     final result = await _authService.register(body);
 
       if (!mounted) return;
 
       final token = result['access_token'];
+      final refreshToken = result['refresh_token'];
       final user = result['user'];
 
-      await SessionService.saveSession(token, user);
+      await SessionService.saveSession(
+        token, 
+        user,
+        refreshToken: refreshToken,
+      );
 
       if (!mounted) return;
 

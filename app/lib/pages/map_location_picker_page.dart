@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import '../components/search_bar.dart';
 import '../components/base_map.dart';
 
@@ -33,15 +34,43 @@ class _MapLocationPickerPageState extends State<MapLocationPickerPage> {
   @override
   void initState() {
     super.initState();
-    _cameraOptions = CameraOptions(
-      center: Point(
-        coordinates: Position(
-          widget.initialLng ?? -75.56359,
-          widget.initialLat ?? 6.25184,
-        ),
-      ),
-      zoom: 14,
-    );
+    _initializeCamera();
+  }
+
+  Future<void> _initializeCamera() async {
+    try {
+      // Get user's current position
+      final position = await geo.Geolocator.getCurrentPosition();
+      
+      if (mounted) {
+        setState(() {
+          _cameraOptions = CameraOptions(
+            center: Point(
+              coordinates: Position(
+                widget.initialLng ?? position.longitude,
+                widget.initialLat ?? position.latitude,
+              ),
+            ),
+            zoom: 14,
+          );
+        });
+      }
+    } catch (e) {
+      // Fallback to default or provided coordinates if location fails
+      if (mounted) {
+        setState(() {
+          _cameraOptions = CameraOptions(
+            center: Point(
+              coordinates: Position(
+                widget.initialLng ?? -75.56359,
+                widget.initialLat ?? 6.25184,
+              ),
+            ),
+            zoom: 14,
+          );
+        });
+      }
+    }
   }
 
   // --- Forward geocoding con autocomplete ---
@@ -202,9 +231,16 @@ class _MapLocationPickerPageState extends State<MapLocationPickerPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Wait for camera to be initialized
+    if (_cameraOptions == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("Selecciona ubicación")),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
-      resizeToAvoidBottomInset:
-          false, // ✅ evita que todo se mueva con el teclado
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(title: const Text("Selecciona ubicación")),
       body: Stack(
         children: [
@@ -216,11 +252,7 @@ class _MapLocationPickerPageState extends State<MapLocationPickerPage> {
             },
             showUser: true,
             followUser: false,
-            children: const [
-              Center(
-                child: Icon(Icons.location_on, color: Colors.red, size: 40),
-              ),
-            ],
+            children: const [],
           ),
           // --- Pin fijo ---
           const Center(
@@ -233,7 +265,6 @@ class _MapLocationPickerPageState extends State<MapLocationPickerPage> {
             right: 10,
             child: Column(
               children: [
-                // Remove the Padding since CustomSearchBar already has it
                 CustomSearchBar(
                   controller: _searchController,
                   onChanged: (value) {
@@ -242,14 +273,10 @@ class _MapLocationPickerPageState extends State<MapLocationPickerPage> {
                       _searchPlaces(value);
                     });
                   },
-                  // Optional: Add onTap if you want specific behavior when tapping the search bar
-                  onTap: () {
-                    // You could expand search results or do other actions here if needed
-                  },
                 ),
                 if (_searchResults.isNotEmpty)
                   Container(
-                    margin: const EdgeInsets.only(top: 8, left: 16, right: 16), // Adjust margins since CustomSearchBar has its own padding
+                    margin: const EdgeInsets.only(top: 8, left: 16, right: 16),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),

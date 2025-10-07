@@ -59,14 +59,18 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     try {
       final result = await _authService.login(email, password);
 
-      // Check if the widget is still mounted before using context
       if (!mounted) return;
 
       final token = result['access_token'];
+      final refreshToken = result['refresh_token'];
       final user = result['user'];
 
-      // Save session
-      await SessionService.saveSession(token, user);
+      // Save session with refresh token
+      await SessionService.saveSession(
+        token, 
+        user,
+        refreshToken: refreshToken,
+      );
 
       // Navigate to main screen
       if (mounted) {
